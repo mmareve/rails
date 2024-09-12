@@ -158,6 +158,10 @@ module ActiveRecord
         @@already_loaded_fixtures.clear
       end
 
+      def setup_transactions
+        use_transactional_tests.merge!(yield)
+      end
+
       def setup_transactional_fixtures
         setup_shared_connection_pool
 
@@ -174,8 +178,9 @@ module ActiveRecord
           shard = payload[:shard] if payload.key?(:shard)
 
           if connection_name
+
             pool = ActiveRecord::Base.connection_handler.retrieve_connection_pool(connection_name, shard: shard)
-            if pool
+            if pool && !pool.db_config.configuration_hash[:disable_test_transactions]
               setup_shared_connection_pool
 
               unless @fixture_connection_pools.include?(pool)
@@ -212,6 +217,7 @@ module ActiveRecord
           pool_manager = handler.send(:connection_name_to_pool_manager)[name]
           pool_manager.shard_names.each do |shard_name|
             writing_pool_config = pool_manager.get_pool_config(ActiveRecord.writing_role, shard_name)
+            next if writing_pool_config.db_config.configuration_hash[:disable_test_transactions]
             @saved_pool_configs[name][shard_name] ||= {}
             pool_manager.role_names.each do |role|
               next unless pool_config = pool_manager.get_pool_config(role, shard_name)
